@@ -5,6 +5,9 @@ public record BookDto(
         String title,
         String author,
         String genre,
-        double price) {
-
+        double price
+) {
+    public static BookDto fallback(){
+        return new BookDto(Long.getLong("id"), "title", "author", "genre", 0.0);
+    }
 }
