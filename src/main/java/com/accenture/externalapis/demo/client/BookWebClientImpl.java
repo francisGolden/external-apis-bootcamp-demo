@@ -40,27 +40,22 @@ public class BookWebClientImpl implements BookWebClient {
                 .retrieve()
                 .bodyToFlux(BookDto.class)
                 .timeout(Duration.ofSeconds(3))
-                .retry(3)
                 .onErrorMap(WebClientResponseException.NotFound.class, e ->
-                        new ClientException("WebClientResponseException. Books endpoint not found. Message: " + e.getMessage(), e)
-                )
+                        new ClientException("Books endpoint not found. Message: " + e.getMessage(), e))
                 .onErrorMap(WebClientResponseException.class, e -> {
                     if (e.getStatusCode().is4xxClientError()) {
-                        return new ClientException("Client Error (4xx) while fetching books list. Message: " + e.getMessage(), e);
-                    } else if (e.getStatusCode().is5xxServerError()) {
-                        return new ClientException("Server Error (5xx) while fetching books list. Message: " + e.getMessage(), e);
+                        return new ClientException("Client error (4xx) while fetching books list. Message: " + e.getMessage(), e);
                     }
-                    return new ClientException("Unexpected HTTP error while fetching books list. " + e.getMessage(), e);
+                    return new ClientException("Server error (5xx) while fetching books list. Message: " + e.getMessage(), e);
                 })
                 .onErrorMap(WebClientRequestException.class, e ->
-                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-                )
-                .onErrorMap(e -> {
-                    if (e.getClass().getSimpleName().equals("DecodingException") || e.getMessage().contains("JSON")) {
-                        return new ClientException("Decoding error or invalid JSON for the books list. Message: " + e.getMessage(), e);
-                    }
-                    return new ClientException("Unexpected error in the reactive stream for the books list. Message: " + e.getMessage(), e);
-                });
+                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e))
+                .onErrorMap(DecodingException.class, e ->
+                        new ClientException("Decoding error / invalid JSON for the books list. Message: " + e.getMessage(), e))
+                .onErrorMap(TimeoutException.class, e ->
+                        new ClientException("Timeout while fetching books list.", e))
+                .onErrorMap(e -> !(e instanceof ClientException), e ->
+                        new ClientException("Unexpected error in the reactive stream for the books list. Message: " + e.getMessage(), e));
     }
 
     @Override

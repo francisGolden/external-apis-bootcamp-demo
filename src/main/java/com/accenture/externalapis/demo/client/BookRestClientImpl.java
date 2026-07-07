@@ -84,5 +84,5 @@ public class BookRestClientImpl implements BookRestClient {
             throw new ClientException("Unexpected error while fetching books list. " + e.getMessage(), e);
         }
     }
-    
+
 }
