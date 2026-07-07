@@ -1,21 +1,36 @@
 package com.accenture.externalapis.demo.client;
 
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
+import com.accenture.externalapis.demo.dto.BookDto;
+import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-// TODO: Make this class implement BookRestClient.
+import java.util.List;
+
 @Component
-public class BookRestClientImpl {
+public class BookRestClientImpl implements BookRestClient {
 
     private RestClient restClient;
 
     public BookRestClientImpl(RestClient.Builder builder, ExternalServiceProperties properties) {
-        // TODO: Build the RestClient using builder.baseUrl(properties.baseUrl()).build()
-        // and assign it to this.restClient
-        //
         // Optional/bonus: this service doesn't require auth, but in a real API you would
         // often also add builder.defaultHeader("Authorization", "Bearer " + token) here.
+        this.restClient = builder.baseUrl(properties.baseUrl()).build();
+    }
+
+    @Override
+    public BookDto getBook(Long id) {
+        return restClient
+                .get()
+                .uri("/api/books/{id}", id)
+                .retrieve()
+                .body(BookDto.class);
+    }
+
+    @Override
+    public List<BookDto> getAllBooks() {
+        return List.of();
     }
 
     // TODO: Implement getBook(Long id) - fetch one book from GET /books/{id} as a
