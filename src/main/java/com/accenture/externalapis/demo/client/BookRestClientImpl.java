@@ -3,6 +3,8 @@ package com.accenture.externalapis.demo.client;
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
 import com.accenture.externalapis.demo.dto.BookApiResponse;
 import com.accenture.externalapis.demo.dto.BookDto;
+import org.apache.catalina.connector.ClientAbortException;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.*;
@@ -23,12 +25,14 @@ public class BookRestClientImpl implements BookRestClient {
     @Override
     public BookDto getBook(Long id) {
 
-
         try {
             BookDto bookDto = restClient
                     .get()
                     .uri("/books/{id}", id)
                     .retrieve()
+                    .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                        throw new ClientException("Client error:" + res.getStatusCode());
+                    })
                     .body(BookDto.class);
 
             if (bookDto == null) {
