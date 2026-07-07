@@ -7,7 +7,7 @@ public record BookApiResponse(
         String genre,
         double price,
         String isbn,
-        Integer publishedYear
+        int publishedYear
 ) {
 
 }

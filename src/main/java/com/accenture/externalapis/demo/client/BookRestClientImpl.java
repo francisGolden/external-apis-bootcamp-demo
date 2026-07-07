@@ -2,8 +2,10 @@ package com.accenture.externalapis.demo.client;
 
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
 import com.accenture.externalapis.demo.dto.BookDto;
-import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -21,11 +23,20 @@ public class BookRestClientImpl implements BookRestClient {
 
     @Override
     public BookDto getBook(Long id) {
-        return restClient
-                .get()
-                .uri("/api/books/{id}", id)
-                .retrieve()
-                .body(BookDto.class);
+        try {
+            return restClient
+                    .get()
+                    .uri("/books/{id}", id)
+                    .retrieve()
+                    .body(BookDto.class);
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new ClientException("HttpClientErrorException: Not found. Message: " + e.getMessage(), e);
+        } catch (HttpServerErrorException e) {
+            throw new ClientException("HttpServerErrorException: Not found. Message: " + e.getMessage(), e);
+        } catch (ResourceAccessException e) {
+            throw new ClientException("Connection refused / timeout - the external service is unreachable Message: " + e.getMessage(), e);
+        }
+
     }
 
     @Override

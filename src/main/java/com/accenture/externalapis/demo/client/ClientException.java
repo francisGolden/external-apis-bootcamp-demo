@@ -5,4 +5,10 @@ package com.accenture.externalapis.demo.client;
 // takes a message, and one that takes a message + cause (for wrapping the
 // original RestClient/WebClient exception).
 public class ClientException extends RuntimeException {
+    public ClientException(String message){
+        super(message);
+    }
+    public ClientException (String message, Throwable cause){
+        super(message, cause);
+    }
 }
