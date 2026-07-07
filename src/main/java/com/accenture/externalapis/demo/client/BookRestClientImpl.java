@@ -1,6 +1,7 @@
 package com.accenture.externalapis.demo.client;
 
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
+import com.accenture.externalapis.demo.dto.BookApiResponse;
 import com.accenture.externalapis.demo.dto.BookDto;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
@@ -8,6 +9,8 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
+import java.awt.print.Book;
+import java.util.Arrays;
 import java.util.List;
 
 @Component
@@ -32,7 +35,7 @@ public class BookRestClientImpl implements BookRestClient {
         } catch (HttpClientErrorException.NotFound e) {
             throw new ClientException("HttpClientErrorException: Not found. Message: " + e.getMessage(), e);
         } catch (HttpServerErrorException e) {
-            throw new ClientException("HttpServerErrorException: Not found. Message: " + e.getMessage(), e);
+            throw new ClientException("HttpServerErrorException. Message: " + e.getMessage(), e);
         } catch (ResourceAccessException e) {
             throw new ClientException("Connection refused / timeout - the external service is unreachable Message: " + e.getMessage(), e);
         }
@@ -41,7 +44,26 @@ public class BookRestClientImpl implements BookRestClient {
 
     @Override
     public List<BookDto> getAllBooks() {
-        return List.of();
+        try {
+            BookApiResponse[] array = restClient
+                    .get()
+                    .uri("/books")
+                    .retrieve()
+                    .body(BookApiResponse[].class);
+            if (array == null){
+                return List.of();
+            }
+            return Arrays
+                    .stream(array)
+                    .map(book -> new BookDto(book.id(), book.title(), book.author(), book.genre(), book.price()))
+                    .toList();
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new ClientException("HttpClientErrorException: Not found. Message: " + e.getMessage(), e);
+        } catch (HttpServerErrorException e) {
+            throw new ClientException("HttpServerErrorException. Message: " + e.getMessage(), e);
+        } catch (ResourceAccessException e) {
+            throw new ClientException("Connection refused / timeout - the external service is unreachable Message: " + e.getMessage(), e);
+        }
     }
 
     // TODO: Implement getBook(Long id) - fetch one book from GET /books/{id} as a
