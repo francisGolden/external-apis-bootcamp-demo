@@ -1,32 +1,84 @@
 package com.accenture.externalapis.demo.client;
 
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
+import com.accenture.externalapis.demo.dto.BookApiResponse;
+import com.accenture.externalapis.demo.dto.BookDto;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import org.springframework.web.client.*;
+import java.util.Arrays;
+import java.util.List;
 
-// TODO: Make this class implement BookRestClient.
 @Component
-public class BookRestClientImpl {
+public class BookRestClientImpl implements BookRestClient {
 
     private RestClient restClient;
 
     public BookRestClientImpl(RestClient.Builder builder, ExternalServiceProperties properties) {
-        // TODO: Build the RestClient using builder.baseUrl(properties.baseUrl()).build()
-        // and assign it to this.restClient
-        //
         // Optional/bonus: this service doesn't require auth, but in a real API you would
         // often also add builder.defaultHeader("Authorization", "Bearer " + token) here.
+        this.restClient = builder.baseUrl(properties.baseUrl()).build();
     }
 
-    // TODO: Implement getBook(Long id) - fetch one book from GET /books/{id} as a
-    // BookApiResponse, then map it onto a BookDto (only keep the fields BookDto needs).
-    //
-    // TODO: Handle the main RestClient error cases and rethrow them as ClientException:
-    //  - HttpClientErrorException (4xx, e.g. book not found)
-    //  - HttpServerErrorException (5xx, e.g. the faulty/teapot book)
-    //  - ResourceAccessException (connection refused / timeout - the external service is unreachable)
+    @Override
+    public BookDto getBook(Long id) {
 
-    // TODO: Implement getAllBooks() - fetch all books from GET /books as
-    // BookApiResponse[], then map each one onto a BookDto. Handle the same error
-    // cases as getBook() above.
+
+        try {
+            BookDto bookDto = restClient
+                    .get()
+                    .uri("/books/{id}", id)
+                    .retrieve()
+                    .body(BookDto.class);
+
+            if (bookDto == null) {
+                throw new ClientException("ClientException: the server responded with 200 OK but the response was null.");
+            }
+
+            return bookDto;
+        } catch (UnknownContentTypeException e) {
+            throw new ClientException("UnknownContentTypeException for the requested resource with id + " + id + ". Message: " + e.getMessage(), e);
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new ClientException("HttpClientErrorException. Resource with id " + id + " not found. Message: " + e.getMessage(), e);
+        } catch (HttpClientErrorException e) {
+            throw new ClientException("HttpClientErrorException. Resource id: + " + id + " not found. Message: " + e.getMessage(), e);
+        } catch (HttpServerErrorException e) {
+            throw new ClientException("HttpServerErrorException. Resource id: + " + id + "not found. Message: " + e.getMessage(), e);
+        } catch (ResourceAccessException e) {
+            throw new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e);
+        } catch (RestClientException e) {
+            throw new ClientException("RestClientException. Invalid JSON or other unexpected error during elaboration of requested book with id " + id + ". " + e.getMessage(), e);
+        }
+
+    }
+
+    @Override
+    public List<BookDto> getAllBooks() {
+        try {
+            BookApiResponse[] array = restClient
+                    .get()
+                    .uri("/books")
+                    .retrieve()
+                    .body(BookApiResponse[].class);
+            if (array == null){
+                return List.of();
+            }
+            return Arrays
+                    .stream(array)
+                    .map(book -> new BookDto(book.id(), book.title(), book.author(), book.genre(), book.price()))
+                    .toList();
+        }catch (UnknownContentTypeException e) {
+            throw new ClientException("UnknownContentTypeException for the books list. Message: " + e.getMessage(), e);
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new ClientException("HttpClientErrorException. Books endpoint not found. Message: " + e.getMessage(), e);
+        } catch (HttpClientErrorException e) {
+            throw new ClientException("HttpClientErrorException while fetching books. Message: " + e.getMessage(), e);
+        } catch (HttpServerErrorException e) {
+            throw new ClientException("HttpServerErrorException while fetching books. Message: " + e.getMessage(), e);
+        } catch (ResourceAccessException e) {
+            throw new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e);
+        } catch (RestClientException e) {
+            throw new ClientException("RestClientException. Unexpected error during elaboration of books list request. " + e.getMessage(), e);
+        }
+    }
 }
