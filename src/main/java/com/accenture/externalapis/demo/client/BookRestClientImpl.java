@@ -31,6 +31,8 @@ public class BookRestClientImpl implements BookRestClient {
             throw new ClientException("UnknownContentTypeException. Message: " + e.getMessage(), e);
         } catch (HttpClientErrorException.NotFound e) {
             throw new ClientException("HttpClientErrorException: Not found. Message: " + e.getMessage(), e);
+        } catch (HttpClientErrorException e) {
+            throw new ClientException("HttpClientErrorException. Message: " + e.getMessage(), e);
         } catch (HttpServerErrorException e) {
             throw new ClientException("HttpServerErrorException. Message: " + e.getMessage(), e);
         } catch (ResourceAccessException e) {
