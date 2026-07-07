@@ -1,34 +1,121 @@
 package com.accenture.externalapis.demo.client;
 
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
+import com.accenture.externalapis.demo.dto.BookApiResponse;
+import com.accenture.externalapis.demo.dto.BookDto;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.*;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientRequestException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
-// TODO: Make this class implement BookWebClient.
+import java.util.List;
+import org.springframework.core.codec.DecodingException;
+
 @Component
-public class BookWebClientImpl {
+public class BookWebClientImpl implements BookWebClient {
 
     private WebClient webClient;
 
     public BookWebClientImpl(WebClient.Builder builder, ExternalServiceProperties properties) {
-        // TODO: Build the WebClient using builder.baseUrl(properties.baseUrl()).build()
-        // and assign it to this.webClient
-        //
+        this.webClient = builder.baseUrl(properties.baseUrl()).build();
         // Optional/bonus: this service doesn't require auth, but in a real API you would
         // often also add builder.defaultHeader("Authorization", "Bearer " + token) here.
     }
 
-    // TODO: Implement getBookAsync(Long id) - fetch one book from GET /books/{id} as
-    // Mono<BookApiResponse>, then map it onto a Mono<BookDto>.
-    //
-    // TODO: Handle the main WebClient error cases and rethrow them as ClientException,
-    // e.g. via onStatus()/onErrorResume():
-    //  - WebClientResponseException (4xx/5xx, e.g. book not found or the faulty/teapot book)
-    //  - WebClientRequestException (connection refused / timeout - the external service is unreachable)
+    @Override
+    public Mono<BookDto> getBookAsync(Long id) {
+        return webClient.get()
+                .uri("/books/{id}", id)
+                .retrieve()
+                .bodyToMono(BookDto.class)
+                .switchIfEmpty(Mono.error(
+                        new ClientException("ClientException: the server responded with 200 OK but the response was empty.")
+                ))
+                .onErrorMap(DecodingException.class, e ->
+                        new ClientException("DecodingException for the requested resource with id " + id + ". Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(WebClientResponseException.NotFound.class, e ->
+                        new ClientException("WebClientResponseException. Resource with id " + id + " not found. Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(WebClientResponseException.class, e -> {
+                    if (e.getStatusCode().is4xxClientError()) {
+                        return new ClientException("Client Error (4xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
+                    } else if (e.getStatusCode().is5xxServerError()) {
+                        return new ClientException("Server Error (5xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
+                    }
+                    return new ClientException("WebClientResponseException. Unexpected HTTP error for id " + id + ". " + e.getMessage(), e);
+                })
+                .onErrorMap(WebClientRequestException.class, e ->
+                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
+                );
+    }
 
-    // TODO: Implement getAllBooksAsync() - fetch all books from GET /books as
-    // Flux<BookApiResponse>, then map each one onto a BookDto. Handle the same error
-    // cases as getBookAsync() above.
+    @Override
+    public Flux<BookDto> getAllBooksAsync() {
+        return webClient.get()
+                .uri("/books")
+                .retrieve()
+                .bodyToFlux(BookDto.class)
+                .onErrorMap(WebClientResponseException.NotFound.class, e ->
+                        new ClientException("WebClientResponseException. Books endpoint not found. Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(WebClientResponseException.class, e -> {
+                    if (e.getStatusCode().is4xxClientError()) {
+                        return new ClientException("Client Error (4xx) while fetching books list. Message: " + e.getMessage(), e);
+                    } else if (e.getStatusCode().is5xxServerError()) {
+                        return new ClientException("Server Error (5xx) while fetching books list. Message: " + e.getMessage(), e);
+                    }
+                    return new ClientException("Unexpected HTTP error while fetching books list. " + e.getMessage(), e);
+                })
+                .onErrorMap(WebClientRequestException.class, e ->
+                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(e -> {
+                    if (e.getClass().getSimpleName().equals("DecodingException") || e.getMessage().contains("JSON")) {
+                        return new ClientException("Decoding error or invalid JSON for the books list. Message: " + e.getMessage(), e);
+                    }
+                    return new ClientException("Unexpected error in the reactive stream for the books list. Message: " + e.getMessage(), e);
+                });
+    }
+
+    @Override
+    public Mono<List<BookDto>> getBooksInParallel(Long id1, Long id2) {
+        Mono<BookDto> bookDtoMono = fetchBookSafely(id1);
+        Mono<BookDto> bookDtoMono2 = fetchBookSafely(id2);
+
+        return Mono.zip(bookDtoMono, bookDtoMono2)
+                .map(tuple -> List.of(
+                        tuple.getT1(),
+                        tuple.getT2()
+                ));
+    }
+
+    private Mono<BookDto> fetchBookSafely(Long id) {
+        return webClient.get()
+                .uri("/books/{id}", id)
+                .retrieve()
+                .bodyToMono(BookDto.class)
+                .onErrorMap(DecodingException.class, e ->
+                        new ClientException("DecodingException for the requested resource with id " + id + ". Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(WebClientResponseException.NotFound.class, e ->
+                        new ClientException("WebClientResponseException. Resource with id " + id + " not found. Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(WebClientResponseException.class, e -> {
+                    if (e.getStatusCode().is4xxClientError()) {
+                        return new ClientException("Client Error (4xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
+                    } else if (e.getStatusCode().is5xxServerError()) {
+                        return new ClientException("Server Error (5xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
+                    }
+                    return new ClientException("WebClientResponseException. Unexpected HTTP error for id " + id + ". " + e.getMessage(), e);
+                })
+                .onErrorMap(WebClientRequestException.class, e ->
+                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
+                );
+    }
 
     // TODO: Implement getBooksInParallel(Long id1, Long id2) - fetch two books in
     // parallel with Mono.zip(). Handle the same error cases as getBookAsync() above.
