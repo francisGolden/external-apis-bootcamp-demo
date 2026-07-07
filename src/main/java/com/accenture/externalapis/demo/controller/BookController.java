@@ -17,11 +17,13 @@ import reactor.core.publisher.Mono;
 public class BookController {
 
     private final BookRestClient bookRestClient;
-    private final BookWebClient bookWebClient;
+//    private final BookWebClient bookWebClient;
 
-    public BookController(BookRestClient bookRestClient, BookWebClient bookWebClient) {
+    public BookController(BookRestClient bookRestClient
+//                          , BookWebClient bookWebClient
+    ) {
         this.bookRestClient = bookRestClient;
-        this.bookWebClient = bookWebClient;
+//        this.bookWebClient = bookWebClient;
     }
 
     @GetMapping("/{id}")
@@ -34,19 +36,19 @@ public class BookController {
         return bookRestClient.getAllBooks();
     }
 
-    @GetMapping("/async/{id}")
-    public Mono<BookDto> getBookAsync(@PathVariable Long id) {
-        return bookWebClient.getBookAsync(id);
-    }
+//    @GetMapping("/async/{id}")
+//    public Mono<BookDto> getBookAsync(@PathVariable Long id) {
+//        return bookWebClient.getBookAsync(id);
+//    }
 
-    @GetMapping("/async")
-    public Flux<BookDto> getAllBooksAsync() {
-        return bookWebClient.getAllBooksAsync();
-    }
+//    @GetMapping("/async")
+//    public Flux<BookDto> getAllBooksAsync() {
+//        return bookWebClient.getAllBooksAsync();
+//    }
 
-    @GetMapping("/async/parallel")
-    public Mono<List<BookDto>> getBooksInParallel(@RequestParam Long id1,
-                                                  @RequestParam Long id2) {
-        return bookWebClient.getBooksInParallel(id1, id2);
-    }
+//    @GetMapping("/async/parallel")
+//    public Mono<List<BookDto>> getBooksInParallel(@RequestParam Long id1,
+//                                                  @RequestParam Long id2) {
+//        return bookWebClient.getBooksInParallel(id1, id2);
+//    }
 }
