@@ -11,7 +11,10 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
+
 import org.springframework.core.codec.DecodingException;
 
 @Component
@@ -31,6 +34,7 @@ public class BookWebClientImpl implements BookWebClient {
                 .uri("/books/{id}", id)
                 .retrieve()
                 .bodyToMono(BookDto.class)
+                .timeout(Duration.ofSeconds(3))
                 .switchIfEmpty(Mono.error(
                         new ClientException("ClientException: the server responded with 200 OK but the response was empty.")
                 ))
@@ -50,7 +54,8 @@ public class BookWebClientImpl implements BookWebClient {
                 })
                 .onErrorMap(WebClientRequestException.class, e ->
                         new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-                );
+                )
+                .onErrorMap(TimeoutException.class, e -> new ClientException("TimeoutException. The request resource did not receive a response in a timely manner."));
     }
 
     @Override
@@ -114,9 +119,6 @@ public class BookWebClientImpl implements BookWebClient {
                 })
                 .onErrorMap(WebClientRequestException.class, e ->
                         new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-                );
+                ).onErrorMap(TimeoutException.class, e -> new ClientException("TimeoutException. The request resource did not receive a response in a timely manner."));
     }
-
-    // TODO: Implement getBooksInParallel(Long id1, Long id2) - fetch two books in
-    // parallel with Mono.zip(). Handle the same error cases as getBookAsync() above.
 }
