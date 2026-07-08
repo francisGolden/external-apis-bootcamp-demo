@@ -3,6 +3,7 @@ package com.accenture.externalapis.demo.client;
 import com.accenture.externalapis.demo.config.ExternalServiceProperties;
 import com.accenture.externalapis.demo.dto.BookApiResponse;
 import com.accenture.externalapis.demo.dto.BookDto;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.*;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -11,7 +12,10 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
+
 import org.springframework.core.codec.DecodingException;
 
 @Component
@@ -27,30 +31,7 @@ public class BookWebClientImpl implements BookWebClient {
 
     @Override
     public Mono<BookDto> getBookAsync(Long id) {
-        return webClient.get()
-                .uri("/books/{id}", id)
-                .retrieve()
-                .bodyToMono(BookDto.class)
-                .switchIfEmpty(Mono.error(
-                        new ClientException("ClientException: the server responded with 200 OK but the response was empty.")
-                ))
-                .onErrorMap(DecodingException.class, e ->
-                        new ClientException("DecodingException for the requested resource with id " + id + ". Message: " + e.getMessage(), e)
-                )
-                .onErrorMap(WebClientResponseException.NotFound.class, e ->
-                        new ClientException("WebClientResponseException. Resource with id " + id + " not found. Message: " + e.getMessage(), e)
-                )
-                .onErrorMap(WebClientResponseException.class, e -> {
-                    if (e.getStatusCode().is4xxClientError()) {
-                        return new ClientException("Client Error (4xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
-                    } else if (e.getStatusCode().is5xxServerError()) {
-                        return new ClientException("Server Error (5xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
-                    }
-                    return new ClientException("WebClientResponseException. Unexpected HTTP error for id " + id + ". " + e.getMessage(), e);
-                })
-                .onErrorMap(WebClientRequestException.class, e ->
-                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-                );
+        return fetchBookSafely(id);
     }
 
     @Override
@@ -59,26 +40,23 @@ public class BookWebClientImpl implements BookWebClient {
                 .uri("/books")
                 .retrieve()
                 .bodyToFlux(BookDto.class)
+                .timeout(Duration.ofSeconds(3))
                 .onErrorMap(WebClientResponseException.NotFound.class, e ->
-                        new ClientException("WebClientResponseException. Books endpoint not found. Message: " + e.getMessage(), e)
-                )
+                        new ClientException("Books endpoint not found. Message: " + e.getMessage(), e))
                 .onErrorMap(WebClientResponseException.class, e -> {
                     if (e.getStatusCode().is4xxClientError()) {
-                        return new ClientException("Client Error (4xx) while fetching books list. Message: " + e.getMessage(), e);
-                    } else if (e.getStatusCode().is5xxServerError()) {
-                        return new ClientException("Server Error (5xx) while fetching books list. Message: " + e.getMessage(), e);
+                        return new ClientException("Client error (4xx) while fetching books list. Message: " + e.getMessage(), e);
                     }
-                    return new ClientException("Unexpected HTTP error while fetching books list. " + e.getMessage(), e);
+                    return new ClientException("Server error (5xx) while fetching books list. Message: " + e.getMessage(), e);
                 })
                 .onErrorMap(WebClientRequestException.class, e ->
-                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-                )
-                .onErrorMap(e -> {
-                    if (e.getClass().getSimpleName().equals("DecodingException") || e.getMessage().contains("JSON")) {
-                        return new ClientException("Decoding error or invalid JSON for the books list. Message: " + e.getMessage(), e);
-                    }
-                    return new ClientException("Unexpected error in the reactive stream for the books list. Message: " + e.getMessage(), e);
-                });
+                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e))
+                .onErrorMap(DecodingException.class, e ->
+                        new ClientException("Decoding error / invalid JSON for the books list. Message: " + e.getMessage(), e))
+                .onErrorMap(TimeoutException.class, e ->
+                        new ClientException("Timeout while fetching books list.", e))
+                .onErrorMap(e -> !(e instanceof ClientException), e ->
+                        new ClientException("Unexpected error in the reactive stream for the books list. Message: " + e.getMessage(), e));
     }
 
     @Override
@@ -98,8 +76,10 @@ public class BookWebClientImpl implements BookWebClient {
                 .uri("/books/{id}", id)
                 .retrieve()
                 .bodyToMono(BookDto.class)
+                .switchIfEmpty(Mono.error(new ClientException("Server responded with 200 OK but no data was returned in the respons for id " + id)))
+                .timeout(Duration.ofSeconds(3))
                 .onErrorMap(DecodingException.class, e ->
-                        new ClientException("DecodingException for the requested resource with id " + id + ". Message: " + e.getMessage(), e)
+                        new ClientException(" DecodingException for the requested resource with id " + id + ". Message: " + e.getMessage(), e)
                 )
                 .onErrorMap(WebClientResponseException.NotFound.class, e ->
                         new ClientException("WebClientResponseException. Resource with id " + id + " not found. Message: " + e.getMessage(), e)
@@ -114,9 +94,6 @@ public class BookWebClientImpl implements BookWebClient {
                 })
                 .onErrorMap(WebClientRequestException.class, e ->
                         new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-                );
+                ).onErrorMap(TimeoutException.class, e -> new ClientException("TimeoutException. The request resource did not receive a response in a timely manner."));
     }
-
-    // TODO: Implement getBooksInParallel(Long id1, Long id2) - fetch two books in
-    // parallel with Mono.zip(). Handle the same error cases as getBookAsync() above.
 }

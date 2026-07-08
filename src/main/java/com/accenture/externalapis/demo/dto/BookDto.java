@@ -5,6 +5,6 @@ public record BookDto(
         String title,
         String author,
         String genre,
-        double price) {
-
+        double price
+) {
 }
