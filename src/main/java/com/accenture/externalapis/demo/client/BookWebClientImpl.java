@@ -75,30 +75,25 @@ public class BookWebClientImpl implements BookWebClient {
         return webClient.get()
                 .uri("/books/{id}", id)
                 .retrieve()
-                .onStatus(httpStatusCode -> httpStatusCode.is4xxClientError(), response ->
-                        Mono.error(new ClientException("Client Error")))
-                .onStatus(httpStatusCode -> httpStatusCode.is5xxServerError(), response ->
-                        Mono.error(new ClientException("Server Error")))
                 .bodyToMono(BookDto.class)
-                .switchIfEmpty(Mono.just(BookDto.fallback()))
+                .switchIfEmpty(Mono.error(new ClientException("Server responded with 200 OK but no data was returned in the respons for id " + id)))
                 .timeout(Duration.ofSeconds(3))
-                .retry(3)
                 .onErrorMap(DecodingException.class, e ->
                         new ClientException(" DecodingException for the requested resource with id " + id + ". Message: " + e.getMessage(), e)
-                );
-//                .onErrorMap(WebClientResponseException.NotFound.class, e ->
-//                        new ClientException("WebClientResponseException. Resource with id " + id + " not found. Message: " + e.getMessage(), e)
-//                )
-//                .onErrorMap(WebClientResponseException.class, e -> {
-//                    if (e.getStatusCode().is4xxClientError()) {
-//                        return new ClientException("Client Error (4xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
-//                    } else if (e.getStatusCode().is5xxServerError()) {
-//                        return new ClientException("Server Error (5xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
-//                    }
-//                    return new ClientException("WebClientResponseException. Unexpected HTTP error for id " + id + ". " + e.getMessage(), e);
-//                })
-//                .onErrorMap(WebClientRequestException.class, e ->
-//                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
-//                ).onErrorMap(TimeoutException.class, e -> new ClientException("TimeoutException. The request resource did not receive a response in a timely manner."));
+                )
+                .onErrorMap(WebClientResponseException.NotFound.class, e ->
+                        new ClientException("WebClientResponseException. Resource with id " + id + " not found. Message: " + e.getMessage(), e)
+                )
+                .onErrorMap(WebClientResponseException.class, e -> {
+                    if (e.getStatusCode().is4xxClientError()) {
+                        return new ClientException("Client Error (4xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
+                    } else if (e.getStatusCode().is5xxServerError()) {
+                        return new ClientException("Server Error (5xx). Resource id: " + id + ". Message: " + e.getMessage(), e);
+                    }
+                    return new ClientException("WebClientResponseException. Unexpected HTTP error for id " + id + ". " + e.getMessage(), e);
+                })
+                .onErrorMap(WebClientRequestException.class, e ->
+                        new ClientException("Connection refused / timeout - the external service is unreachable. Message: " + e.getMessage(), e)
+                ).onErrorMap(TimeoutException.class, e -> new ClientException("TimeoutException. The request resource did not receive a response in a timely manner."));
     }
 }
